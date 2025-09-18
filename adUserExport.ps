@@ -1,0 +1,29 @@
+# Import the Active Directory module
+Import-Module ActiveDirectory
+
+# Define base domain and output folder (update with your environment)
+$domain = "DC=example,DC=local"
+$date = Get-Date -Format "yyyyMMdd"
+$outputFile = "C:\Path\To\Export\ActiveDirectory_Extract_$date.csv"
+
+# Get the domain's maximum password age
+$maxPasswordAge = (Get-ADDefaultDomainPasswordPolicy).MaxPasswordAge
+
+# Get all users and export with date-based filename
+Get-ADUser -Filter * -SearchBase $domain -Properties DistinguishedName, SamAccountName, mail, whenCreated, LastLogonDate, LastLogonTimeStamp, Office, Enabled, DisplayName, Manager, PasswordLastSet, AccountExpirationDate |
+Select-Object DistinguishedName, 
+              SamAccountName, 
+              mail, 
+              whenCreated, 
+              LastLogonDate, 
+              @{Name="LastLogonTimeStamp"; Expression={([datetime]::FromFileTime($_.LastLogonTimeStamp))}},
+              Office, 
+              Enabled, 
+              DisplayName, 
+              @{Name="Manager"; Expression={$_.Manager}},
+              @{Name="AccountExpiration"; Expression={if ($_.AccountExpirationDate) { $_.AccountExpirationDate } else { "No Expiration Set" }}},
+              @{Name="PasswordExpiration"; Expression={if ($_.PasswordLastSet) { $_.PasswordLastSet.AddDays($maxPasswordAge.TotalDays) } else { "Not Set" }}},
+              @{Name="DateExtracted"; Expression={Get-Date -Format "yyyy-MM-dd"}} |
+Export-Csv -Path $outputFile -NoTypeInformation -Encoding UTF8
+
+Write-Host "User information exported to $outputFile" -ForegroundColor Green
